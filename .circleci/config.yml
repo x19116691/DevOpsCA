@@ -1,0 +1,58 @@
+version: 2.1
+
+executors:
+  docker-executor:
+    docker:
+      - image: circleci/python:3.9  # You can replace this with your preferred image
+    working_directory: ~/repo
+
+jobs:
+  build:
+    executor: docker-executor
+    steps:
+      - checkout  # Checkout the code from GitHub
+      - run:
+          name: Install Docker
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+      - run:
+          name: Build Docker Image
+          command: docker build -t myapp:latest .
+      - run:
+          name: Login to Docker Hub
+          command: echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+      - run:
+          name: Push Docker Image to Docker Hub
+          command: |
+            docker tag myapp:latest $DOCKER_USERNAME/myapp:latest
+            docker push $DOCKER_USERNAME/myapp:latest
+
+  deploy:
+    docker:
+      - image: circleci/python:3.9
+    steps:
+      - checkout  # Checkout the code
+      - run:
+          name: Install SSH client
+          command: sudo apt-get install -y openssh-client
+      - run:
+          name: Deploy to EC2 via SSH
+          command: |
+            echo "${EC2_SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            ssh -o StrictHostKeyChecking=no ec2-user@${EC2_ELASTIC_IP} << 'EOF'
+              docker pull $DOCKER_USERNAME/myapp:latest
+              docker stop myapp || true
+              docker rm myapp || true
+              docker run -d -p 80:3000 --name myapp $DOCKER_USERNAME/myapp:latest
+            EOF
+
+workflows:
+  version: 2
+  deploy:
+    jobs:
+      - build
+      - deploy:
+          requires:
+            - build

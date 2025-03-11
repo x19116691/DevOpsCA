@@ -18,7 +18,8 @@ jobs:
             sudo apt-get install -y docker.io
       - run:
           name: Build Docker Image
-          command: docker build -t myapp:latest .  # Make sure this points to the right directory
+          command: docker build -f app/Dockerfile -t myapp:latest .
+
       - run:
           name: Login to Docker Hub
           command: echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
